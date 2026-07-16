@@ -116,7 +116,7 @@ public class LoanManagementControllerTests : IClassFixture<LoanApiFactory>
     }
 
     [Fact]
-    public async Task Payment_AboveBalance_ShouldReturn409()
+    public async Task Payment_AboveBalance_ShouldReturn400()
     {
         var loan = NewLoan("Lucas", 5000m, 500m, LoanStatus.Active);
         await _factory.ResetAndSeedAsync(loan);
@@ -124,7 +124,7 @@ public class LoanManagementControllerTests : IClassFixture<LoanApiFactory>
 
         var response = await client.PostAsJsonAsync($"/loans/{loan.Id}/payment", new { amount = 600m });
 
-        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
     [Fact]

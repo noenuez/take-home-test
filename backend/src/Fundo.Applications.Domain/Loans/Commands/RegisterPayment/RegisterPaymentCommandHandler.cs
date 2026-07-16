@@ -21,19 +21,10 @@ public sealed class RegisterPaymentCommandHandler
 
     public async Task<LoanResponse> Handle(RegisterPaymentCommand request, CancellationToken cancellationToken)
     {
+        // Business rules (already paid / payment exceeds balance) are enforced by
+        // RegisterPaymentCommandValidator in the pipeline before this handler runs.
         var loan = await _loans.GetByIdAsync(request.LoanId, cancellationToken)
             ?? throw NotFoundException.For(nameof(Loan), request.LoanId);
-
-        if (loan.Status == LoanStatus.Paid)
-        {
-            throw new DomainException("The loan is already fully paid.");
-        }
-
-        if (request.Amount > loan.CurrentBalance)
-        {
-            throw new DomainException(
-                $"Payment of {request.Amount:0.00} exceeds the current balance of {loan.CurrentBalance:0.00}.");
-        }
 
         loan.ApplyPayment(request.Amount);
 

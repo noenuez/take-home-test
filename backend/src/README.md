@@ -30,9 +30,10 @@ Controller → MediatR (ISender.Send)
 Cross-cutting concerns:
 
 - **Validation** runs as a MediatR pipeline behavior; failures become an RFC 9110
-  `application/problem+json` **400** response.
-- **Domain errors** map to **404** (`NotFoundException`) and **409** (`DomainException`)
-  via `IExceptionHandler`s.
+  `application/problem+json` **400** response. Payment business rules (loan already
+  paid, amount exceeds current balance) are validated here too, so they also return **400**.
+- **Not-found** maps to **404** (`NotFoundException`) via an `IExceptionHandler`. A
+  `DomainException` → **409** handler is also wired for future non-input business rules.
 - **Auditing** (`CreatedBy/CreatedAt/UpdatedBy/UpdatedAt`) is applied automatically in
   `SaveChanges`.
 - **Migrations** (schema + seed) run automatically on startup with FluentMigrator
@@ -45,7 +46,7 @@ Cross-cutting concerns:
 | `POST` | `/loans` | Create a loan (`currentBalance` starts equal to `amount`, status `Active`). | `201 Created` |
 | `GET` | `/loans/{id}` | Retrieve a single loan. | `200 OK` / `404` |
 | `GET` | `/loans` | List all loans (newest first). | `200 OK` |
-| `POST` | `/loans/{id}/payment` | Deduct an amount from `currentBalance`; status flips to `Paid` at zero. | `200 OK` / `404` / `409` |
+| `POST` | `/loans/{id}/payment` | Deduct an amount from `currentBalance`; status flips to `Paid` at zero. | `200 OK` / `400` / `404` |
 
 **Loan shape**
 

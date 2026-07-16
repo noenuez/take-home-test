@@ -50,29 +50,6 @@ public class RegisterPaymentCommandHandlerTests
     }
 
     [Fact]
-    public async Task Handle_PaymentAboveBalance_ShouldThrowDomainException()
-    {
-        var loan = new Loan { Amount = 1000m, CurrentBalance = 500m, Status = LoanStatus.Active };
-        SetupLoan(loan);
-
-        var act = () => CreateHandler().Handle(new RegisterPaymentCommand(loan.Id, 600m), default);
-
-        await act.Should().ThrowAsync<DomainException>();
-        _unitOfWork.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
-    }
-
-    [Fact]
-    public async Task Handle_AlreadyPaidLoan_ShouldThrowDomainException()
-    {
-        var loan = new Loan { Amount = 1000m, CurrentBalance = 0m, Status = LoanStatus.Paid };
-        SetupLoan(loan);
-
-        var act = () => CreateHandler().Handle(new RegisterPaymentCommand(loan.Id, 100m), default);
-
-        await act.Should().ThrowAsync<DomainException>();
-    }
-
-    [Fact]
     public async Task Handle_MissingLoan_ShouldThrowNotFoundException()
     {
         _repository
