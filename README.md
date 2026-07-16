@@ -1,83 +1,122 @@
-# **Take-Home Test: Backend-Focused Full-Stack Developer (.NET C# & Angular)**
+# Loan Management System
 
-## **Objective**
+Full-stack loan management application: a **.NET 10 / PostgreSQL** REST API and an
+**Angular 19** frontend. The whole stack runs with a single Docker command.
 
-This take-home test evaluates your ability to develop and integrate a .NET Core (C#) backend with an Angular frontend, focusing on API design, database integration, and basic DevOps practices.
+> Original brief is preserved in [TASK.md](./TASK.md).
+> The brief mentioned SQL Server; this implementation uses **PostgreSQL** as agreed.
 
-## **Instructions**
+## Quick start (one command)
 
-1.  **Fork the provided repository** before starting the implementation.
-2.  Implement the requested features in your forked repository.
-3.  Once you have completed the implementation, **send the link** to your forked repository via email for review.
+Requires Docker. From the repository root:
 
-## **Task**
+```sh
+docker compose up --build
+```
 
-You will build a simple **Loan Management System** with a **.NET Core backend (C#)** exposing RESTful APIs and a **basic Angular frontend** consuming these APIs.
+This starts three containers — PostgreSQL, the API, and the web app (nginx). On boot
+the API applies its FluentMigrator migrations and seeds sample loans.
 
----
+Then open:
 
-## **Requirements**
+```
+http://localhost:8080
+```
 
-### **1. Backend (API) - .NET Core**
+The Angular app is served by nginx, which reverse-proxies `/api/*` to the backend
+(same origin — no CORS needed in this setup).
 
-* Create a **RESTful API** in .NET Core to handle **loan applications**.
-* Implement the following endpoints:
-    * `POST /loans` → Create a new loan.
-    * `GET /loans/{id}` → Retrieve loan details.
-    * `GET /loans` → List all loans.
-    * `POST /loans/{id}/payment` → Deduct from `currentBalance`.
-* Loan example (feel free to improve it):
+Tear everything down (including the database volume):
 
-    ```json
-    {
-        "amount": 1500.00, // Amount requested
-        "currentBalance": 500.00, // Remaining balance
-        "applicantName": "Maria Silva", // User name
-        "status": "active" // Status can be active or paid
-    }
-    ```
+```sh
+docker compose down -v
+```
 
-* Use **Entity Framework Core** with **SQL Server**.
-* Create seed data to populate the loans (the frontend will consume this).
-* Write **unit/integration tests for the API** (xUnit or NUnit).
-* **Dockerize** the backend and create a **Docker Compose** file.
-* Create a README with setup instructions.
+## What it does
 
-### **2. Frontend - Angular (Simplified UI)**  
+| Method | Route | Description |
+| --- | --- | --- |
+| `POST` | `/loans` | Create a loan (`currentBalance` starts equal to `amount`, status `Active`). |
+| `GET` | `/loans/{id}` | Retrieve a single loan. |
+| `GET` | `/loans` | List all loans. |
+| `POST` | `/loans/{id}/payment` | Deduct a payment from `currentBalance`; status flips to `Paid` at zero. |
 
-Develop a **lightweight Angular app** to interact with the backend
+The frontend shows all loans in a table and includes a **New Loan** form.
 
-#### **Features:**  
-- A **table** to display a list of existing loans.  
+## Architecture
 
-#### **Mockup:**  
-[View Mockup](https://kzmgtjqt0vx63yji8h9l.lite.vusercontent.net/)  
-(*The design doesn’t need to be an exact replica of the mockup—it serves as a reference. Aim to keep it as close as possible.*)  
+```
+frontend (Angular 19, nginx)
+        │  /api  →  reverse proxy
+        ▼
+backend  (.NET 10 Web API)
+  Controller → MediatR (CQRS) → ValidationBehavior (FluentValidation)
+             → Command/Query Handler → Repository + IUnitOfWork
+             → EF Core → PostgreSQL
+```
 
----
+Backend solution (`backend/src`):
 
-## **Bonus (Optional, Not Required)**
+| Project | Responsibility |
+| --- | --- |
+| `Fundo.Applications.WebApi` | HTTP host: controllers, DI, exception handling, migration runner. |
+| `Fundo.Applications.Domain` | CQRS commands/queries, handlers, validators, DTOs. |
+| `Fundo.Applications.Data` | `FundoDbContext`, entities, EF config, FluentMigrator migrations, repositories. |
+| `Fundo.Services.Tests` | xUnit unit + integration tests. |
 
-* **Improve error handling and logging** with structured logs.
-* Implement **authentication**.
-* Create a **GitHub Actions** pipeline for building and testing the backend.
+Key choices:
 
----
+- **CQRS** via MediatR; **repository pattern** + unit of work over EF Core.
+- **FluentValidation** runs in the MediatR pipeline; failures → RFC 9110 `problem+json`
+  **400**. Domain errors map to **404** / **409**.
+- **FluentMigrator** owns the schema and seed data; migrations run automatically on
+  startup (with retry while the database is coming up).
+- Auditing (`CreatedBy/At`, `UpdatedBy/At`) applied automatically on save.
 
-## **Evaluation Criteria**
+## Tests
 
-✔ **Code quality** (clean architecture, modularization, best practices).
+```sh
+cd backend/src
+dotnet test
+```
 
-✔ **Functionality** (the API and frontend should work as expected).
+- **Unit tests** (Moq): command/query handlers (balance math, status transitions,
+  not-found / business-rule errors) and validators.
+- **Integration tests**: full HTTP + CQRS pipeline via `WebApplicationFactory` with an
+  in-memory database — no PostgreSQL required.
 
-✔ **Security considerations** (authentication, validation, secure API handling).
+## Local development (without Docker)
 
-✔ **Testing coverage** (unit tests for critical backend functions).
+Requires **.NET 10 SDK**, **Node 20**, and a PostgreSQL instance.
 
-✔ **Basic DevOps implementation** (Docker for backend).
+Backend:
 
----
+```sh
+cd backend/src/Fundo.Applications.WebApi
+cp .env.example .env   # set DB_CONNECTION, e.g. Host=localhost;Port=5432;Database=fundo;Username=postgres;Password=postgres
+dotnet run
+```
 
-## **Additional Information**
+Frontend (dev server on http://localhost:4200, calls the API at http://localhost:8080):
 
-Candidates are encouraged to include a `README.md` file in their repository detailing their implementation approach, any challenges they faced, features they couldn't complete, and any improvements they would make given more time. Ideally, the implementation should be completed within **two days** of starting the test.
+```sh
+cd frontend
+npm install
+npm start
+```
+
+Component-level notes: [backend/src/README.md](./backend/src/README.md) ·
+[frontend/README.md](./frontend/README.md).
+
+## Continuous integration
+
+`.github/workflows/ci.yml` builds and tests the backend and builds the frontend on
+every push / pull request to `main`.
+
+## Notes & possible improvements
+
+- **Authentication** is not implemented (bonus). The pipeline is ready for it —
+  auditing already reads the current user.
+- **Structured logging** could be added (Serilog) for richer request/error logs.
+- The frontend covers the required loans table plus a create form; a **payment** action
+  per row would be a natural next step (the API already supports it).

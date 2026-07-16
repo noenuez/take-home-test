@@ -1,0 +1,43 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: fundo-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: fundo
+    ports:
+      - "5432:5432"
+    volumes:
+      - fundo-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d fundo"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ./backend/src
+      dockerfile: Dockerfile
+    container_name: fundo-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      DB_CONNECTION: "Host=postgres;Port=5432;Database=fundo;Username=postgres;Password=postgres"
+      FRONTEND_URL: "http://localhost:8080"
+
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: fundo-web
+    depends_on:
+      - api
+    ports:
+      - "8080:80"
+
+volumes:
+  fundo-pgdata:

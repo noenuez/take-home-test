@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore;
+﻿using DotNetEnv;
+using Microsoft.AspNetCore;
 using Microsoft.AspNetCore.Hosting;
 using System;
 
@@ -10,6 +11,7 @@ namespace Fundo.Applications.WebApi
         {
             try
             {
+                Env.TraversePath().Load();
                 CreateWebHostBuilder(args).Build().Run();
             }
             catch (Exception ex)
